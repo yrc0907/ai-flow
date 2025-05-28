@@ -22,7 +22,17 @@ interface AppPageProps {
 
 export default async function AppPage({ params }: AppPageProps) {
   const session = await getServerSession();
-  if (!session?.user) {
+  if (!session?.user || !session.user.email) {
+    return notFound();
+  }
+
+  // 从数据库获取用户信息
+  const dbUser = await prisma.user.findUnique({
+    where: { email: session.user.email },
+  });
+
+  if (!dbUser?.id) {
+    console.error("无法从数据库获取用户ID");
     return notFound();
   }
 
@@ -31,7 +41,7 @@ export default async function AppPage({ params }: AppPageProps) {
     where: {
       workspaceId_userId: {
         workspaceId: params.id,
-        userId: session.user.id,
+        userId: dbUser.id,
       },
     },
   });

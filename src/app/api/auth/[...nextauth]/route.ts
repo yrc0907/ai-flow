@@ -60,17 +60,37 @@ const handler = NextAuth({
         console.log(`JWT回调: 设置用户ID ${user.id} 到token`);
         token.id = user.id;
       }
+
+      // 确保token中始终有id
+      if (!token.id) {
+        console.error("JWT回调: token中缺少id");
+      }
+
       return token;
     },
     async session({ session, token }) {
-      if (session.user && token.id) {
+      // 确保session.user对象存在
+      if (!session.user) {
+        session.user = { id: "", email: "", name: "", image: "" };
+        console.error("Session回调: session.user不存在，已创建空对象");
+      }
+
+      if (token.id) {
         console.log(`Session回调: 设置token ID ${token.id} 到session`);
         session.user.id = token.id as string;
       } else {
-        console.error("Session回调: 无法设置用户ID，token或session.user不存在");
+        console.error("Session回调: token中缺少id，无法设置用户ID");
+      }
+
+      // 确认设置成功
+      if (!session.user.id) {
+        console.error("Session回调: 设置用户ID失败");
         console.log("Token:", JSON.stringify(token));
         console.log("Session:", JSON.stringify(session));
+      } else {
+        console.log(`Session回调: 成功设置用户ID ${session.user.id}`);
       }
+
       return session;
     },
   },
