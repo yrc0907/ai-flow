@@ -1,0 +1,212 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  password      String
+  image         String?
+  workspaces    WorkspaceUser[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Workspace {
+  id            String    @id @default(cuid())
+  name          String
+  members       WorkspaceUser[]
+  apps          App[]
+  knowledgeBases KnowledgeBase[]
+  modelProviders ModelProvider[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model WorkspaceUser {
+  id            String    @id @default(cuid())
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId   String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  role          String    // admin, member, viewer
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([workspaceId, userId])
+}
+
+model App {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  icon          String?
+  type          String    // chatbot, agent, workflow
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId   String
+  workflows     Workflow[]
+  knowledgeBases KnowledgeBaseApp[]
+  apiKeys       ApiKey[]
+  conversations Conversation[]
+  logs          LogEntry[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model ApiKey {
+  id            String    @id @default(cuid())
+  name          String
+  key           String    @unique
+  app           App       @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appId         String
+  createdAt     DateTime  @default(now())
+  expiresAt     DateTime?
+}
+
+model Workflow {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  app           App       @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appId         String
+  nodes         WorkflowNode[]
+  edges         WorkflowEdge[]
+  isPublished   Boolean   @default(false)
+  publishedVersion String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model WorkflowNode {
+  id            String    @id @default(cuid())
+  type          String    // start, llm, knowledge, code, condition, etc.
+  position      Json      // { x: number, y: number }
+  data          Json      // node specific data
+  workflow      Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId    String
+  sourceEdges   WorkflowEdge[] @relation("SourceNode")
+  targetEdges   WorkflowEdge[] @relation("TargetNode")
+}
+
+model WorkflowEdge {
+  id            String    @id @default(cuid())
+  sourceNode    WorkflowNode @relation("SourceNode", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  sourceNodeId  String
+  targetNode    WorkflowNode @relation("TargetNode", fields: [targetNodeId], references: [id], onDelete: Cascade)
+  targetNodeId  String
+  workflow      Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  workflowId    String
+}
+
+model KnowledgeBase {
+  id            String    @id @default(cuid())
+  name          String
+  description   String?
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId   String
+  documents     Document[]
+  apps          KnowledgeBaseApp[]
+  vectorStoreId String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model KnowledgeBaseApp {
+  id            String    @id @default(cuid())
+  knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  knowledgeBaseId String
+  app           App       @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appId         String
+
+  @@unique([knowledgeBaseId, appId])
+}
+
+model Document {
+  id            String    @id @default(cuid())
+  name          String
+  content       String    @db.Text
+  metadata      Json?
+  knowledgeBase KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  knowledgeBaseId String
+  chunks        DocumentChunk[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model DocumentChunk {
+  id            String    @id @default(cuid())
+  content       String    @db.Text
+  metadata      Json?
+  embedding     Json?     // 向量嵌入
+  document      Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  documentId    String
+  vectorId      String?   // 向量数据库中的ID
+}
+
+model ModelProvider {
+  id            String    @id @default(cuid())
+  name          String
+  type          String    // openai, anthropic, local, etc.
+  isSystem      Boolean   @default(false)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId   String
+  credentials   Json?
+  models        Model[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Model {
+  id            String    @id @default(cuid())
+  name          String
+  provider      ModelProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  providerId    String
+  contextLength Int
+  pricing       Json?
+  capabilities  String[]  // text, image, audio, etc.
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Conversation {
+  id            String    @id @default(cuid())
+  app           App       @relation(fields: [appId], references: [id], onDelete: Cascade)
+  appId         String
+  messages      Message[]
+  metadata      Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Message {
+  id            String    @id @default(cuid())
+  role          String    // user, assistant, system
+  content       String    @db.Text
+  conversation  Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
+  metadata      Json?     // 包含模型使用信息、token计数等
+  createdAt     DateTime  @default(now())
+}
+
+model LogEntry {
+  id            String    @id @default(cuid())
+  level         String    // info, warn, error
+  message       String
+  metadata      Json?
+  app           App?      @relation(fields: [appId], references: [id], onDelete: SetNull)
+  appId         String?
+  createdAt     DateTime  @default(now())
+}
