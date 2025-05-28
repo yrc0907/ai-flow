@@ -30,15 +30,20 @@ export default function WorkspaceList() {
   useEffect(() => {
     async function fetchWorkspaces() {
       try {
+        console.log("开始获取工作区列表");
         const response = await fetch("/api/workspaces");
 
         if (!response.ok) {
-          throw new Error("获取工作区失败");
+          const errorData = await response.json().catch(() => ({}));
+          console.error("获取工作区失败:", response.status, errorData);
+          throw new Error(`获取工作区失败: ${response.status}`);
         }
 
         const data = await response.json();
+        console.log("成功获取工作区列表:", data.length);
         setWorkspaces(data);
       } catch (error) {
+        console.error("获取工作区列表出错:", error);
         toast({
           variant: "destructive",
           title: "获取失败",
